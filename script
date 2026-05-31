@@ -1,0 +1,229 @@
+-- Doors Notification System | API
+-- Usage: _G.Notify("Title", "Message", "type", duration, font)
+-- Types: "info" | "warn" | "error" | "success" | "item"
+ 
+----------------------------------------------------------------
+-- CONFIG
+----------------------------------------------------------------
+local CFG = {
+    MAX_NOTIFS      = 5,
+    DEFAULT_TIME    = 4,
+    SPACING         = 8,
+    WIDTH           = 300,
+    HEIGHT          = 66,
+    PADDING_X       = 12,
+    ANIM_IN         = 0.22,
+    ANIM_OUT        = 0.18,
+    TOP_OFFSET      = 18,
+ 
+    -- Default font (changeable here or per notification)
+    FONT            = Font.fromName("Oswald"),
+    FONT_SIZE_TITLE = 22,
+    FONT_SIZE_MSG   = 16,
+ 
+    NOISE_ALPHA = 0.92,
+ 
+    -- Themes: { background, border, icon, accent }
+    THEMES = {
+        info    = { Color3.fromRGB(28, 32, 48),  Color3.fromRGB(90, 120, 200), "ℹ", Color3.fromRGB(130, 160, 255) },
+        warn    = { Color3.fromRGB(44, 32, 14),  Color3.fromRGB(210, 145, 30), "⚠", Color3.fromRGB(255, 185, 60)  },
+        error   = { Color3.fromRGB(44, 14, 14),  Color3.fromRGB(200, 50, 50),  "✖", Color3.fromRGB(255, 80, 80)   },
+        success = { Color3.fromRGB(14, 38, 22),  Color3.fromRGB(50, 180, 90),  "✔", Color3.fromRGB(80, 220, 120)  },
+        item    = { Color3.fromRGB(38, 28, 10),  Color3.fromRGB(190, 155, 50), "◈", Color3.fromRGB(230, 195, 80)  },
+    },
+}
+ 
+if _G._DoorsNotifyCleanup then _G._DoorsNotifyCleanup() end
+ 
+local TweenService = game:GetService("TweenService")
+local Players      = game:GetService("Players")
+local player       = Players.LocalPlayer
+ 
+local gui = Instance.new("ScreenGui")
+gui.Name           = "_DoorsNotifyUI"
+gui.ResetOnSpawn   = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder   = 999
+local ok = pcall(function() gui.Parent = game:GetService("CoreGui") end)
+if not ok then gui.Parent = player.PlayerGui end
+ 
+local container = Instance.new("Frame")
+container.Name                   = "Container"
+container.AnchorPoint            = Vector2.new(0.5, 0)
+container.Size                   = UDim2.new(0, CFG.WIDTH, 1, 0)
+container.Position               = UDim2.new(0.5, 0, 0, CFG.TOP_OFFSET)
+container.BackgroundTransparency = 1
+container.Parent                 = gui
+ 
+local queue = {}
+ 
+local function reposition()
+    local y = 0
+    for _, data in ipairs(queue) do
+        TweenService:Create(data.frame,
+            TweenInfo.new(0.15, Enum.EasingStyle.Quad),
+            { Position = UDim2.new(0, 0, 0, y) }
+        ):Play()
+        y = y + CFG.HEIGHT + CFG.SPACING
+    end
+end
+ 
+local function notify(title, message, ntype, duration, customFont)
+    ntype    = ntype    or "info"
+    duration = duration or CFG.DEFAULT_TIME
+    title    = title    or "Notice"
+    message  = message  or ""
+ 
+    local font  = customFont or CFG.FONT
+    local theme = CFG.THEMES[ntype] or CFG.THEMES.info
+    local bgCol, borderCol, icon, accentCol = theme[1], theme[2], theme[3], theme[4]
+ 
+    
+    if #queue >= CFG.MAX_NOTIFS then
+        local oldest = table.remove(queue, 1)
+        if oldest and oldest.frame then oldest.frame:Destroy() end
+    end
+ 
+   
+    local frame = Instance.new("Frame")
+    frame.Size             = UDim2.new(1, 0, 0, CFG.HEIGHT)
+    frame.Position         = UDim2.new(1.3, 0, 0, 0)
+    frame.BackgroundColor3 = bgCol
+    frame.BorderSizePixel  = 0
+    frame.ClipsDescendants = true
+    frame.Parent           = container
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 4)
+ 
+   
+    local accent = Instance.new("Frame")
+    accent.Size             = UDim2.new(0, 3, 1, 0)
+    accent.BackgroundColor3 = borderCol
+    accent.BorderSizePixel  = 0
+    accent.Parent           = frame
+ 
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color        = borderCol
+    stroke.Thickness    = 1
+    stroke.Transparency = 0.55
+    stroke.Parent       = frame
+ 
+  
+    local iconLbl = Instance.new("TextLabel")
+    iconLbl.Size                   = UDim2.new(0, 32, 1, 0)
+    iconLbl.Position               = UDim2.new(0, 8, 0, 0)
+    iconLbl.BackgroundTransparency = 1
+    iconLbl.Text                   = icon
+    iconLbl.TextColor3             = accentCol
+    iconLbl.Font                   = Enum.Font.GothamBold
+    iconLbl.TextSize               = 18
+    iconLbl.Parent                 = frame
+
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size                   = UDim2.new(1, -(32 + CFG.PADDING_X + 8), 0, 26)
+    titleLbl.Position               = UDim2.new(0, 32 + CFG.PADDING_X, 0, 6)
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Text                   = title
+    titleLbl.TextColor3             = accentCol
+    titleLbl.FontFace               = font
+    titleLbl.TextSize               = CFG.FONT_SIZE_TITLE
+    titleLbl.TextXAlignment         = Enum.TextXAlignment.Left
+    titleLbl.TextTruncate           = Enum.TextTruncate.AtEnd
+    titleLbl.Parent                 = frame
+ 
+
+    local msgLbl = Instance.new("TextLabel")
+    msgLbl.Size                   = UDim2.new(1, -(32 + CFG.PADDING_X + 8), 0, 20)
+    msgLbl.Position               = UDim2.new(0, 32 + CFG.PADDING_X, 0, 36)
+    msgLbl.BackgroundTransparency = 1
+    msgLbl.Text                   = message
+    msgLbl.TextColor3             = Color3.fromRGB(195, 185, 170)
+    msgLbl.FontFace               = font
+    msgLbl.TextSize               = CFG.FONT_SIZE_MSG
+    msgLbl.TextXAlignment         = Enum.TextXAlignment.Left
+    msgLbl.TextTruncate           = Enum.TextTruncate.AtEnd
+    msgLbl.Parent                 = frame
+ 
+  
+    local progressBg = Instance.new("Frame")
+    progressBg.Size             = UDim2.new(1, 0, 0, 2)
+    progressBg.Position         = UDim2.new(0, 0, 1, -2)
+    progressBg.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+    progressBg.BorderSizePixel  = 0
+    progressBg.Parent           = frame
+ 
+  
+    local progressFill = Instance.new("Frame")
+    progressFill.Size             = UDim2.new(1, 0, 1, 0)
+    progressFill.BackgroundColor3 = borderCol
+    progressFill.BorderSizePixel  = 0
+    progressFill.Parent           = progressBg
+ 
+    
+    local noise = Instance.new("Frame")
+    noise.Size                   = UDim2.new(1, 0, 1, 0)
+    noise.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
+    noise.BackgroundTransparency = CFG.NOISE_ALPHA
+    noise.BorderSizePixel        = 0
+    noise.ZIndex                 = 5
+    noise.Parent                 = frame
+ 
+    local entry = { frame = frame }
+    table.insert(queue, entry)
+    reposition()
+ 
+   
+    local targetY = (#queue - 1) * (CFG.HEIGHT + CFG.SPACING)
+    TweenService:Create(frame,
+        TweenInfo.new(CFG.ANIM_IN, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        { Position = UDim2.new(0, 0, 0, targetY) }
+    ):Play()
+ 
+   
+    TweenService:Create(progressFill,
+        TweenInfo.new(duration, Enum.EasingStyle.Linear),
+        { Size = UDim2.new(0, 0, 1, 0) }
+    ):Play()
+ 
+    
+    task.delay(duration, function()
+        if not frame or not frame.Parent then return end
+        TweenService:Create(frame,
+            TweenInfo.new(CFG.ANIM_OUT, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+            { Position = UDim2.new(1.3, 0, 0, frame.Position.Y.Offset) }
+        ):Play()
+        task.wait(CFG.ANIM_OUT + 0.05)
+        for i, v in ipairs(queue) do
+            if v == entry then table.remove(queue, i) break end
+        end
+        frame:Destroy()
+        reposition()
+    end)
+end
+ 
+
+_G.Notify = notify
+ 
+_G._DoorsNotifyCleanup = function()
+    for _, v in ipairs(queue) do
+        if v.frame then v.frame:Destroy() end
+    end
+    queue = {}
+    if gui and gui.Parent then gui:Destroy() end
+    _G.Notify = nil
+end
+-- DON'T DELETE THIS THE SCRIPT WON'T WORK OTHERWISE 
+notify("System loaded", "Notification system ready", "success", 3)
+ 
+print([[
+[DoorsNotify] Ready
+_G.Notify("Title", "Message", "type", duration, font)
+Types: info | warn | error | success | item
+Custom font ex: Font.fromName("Bangers")
+]])
+
+require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Thanks for using Grampy's Notification System!", true)
+wait(5)
+require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Doors Modders: https://discord.gg/HNyjBHJJTM", true)
+wait(3)
+require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Good luck.", true)
