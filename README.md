@@ -6,7 +6,7 @@ A simple, custom doors notification API.
 Step 1 — Load the API
 Execute the main script first. This sets up the notification system and makes it available globally.
 
-Step 2 — Send a notification
+Step 2 — 
 Open a new tab in your executor and run:
 _G.Notify("Title", "Message", "type", duration, font)
 
